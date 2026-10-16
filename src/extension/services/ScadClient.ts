@@ -2,7 +2,7 @@ import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { existsSync } from "fs";
 import { readFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { platform } from "process";
 import { window, workspace } from "vscode";
 import { ModelFormat } from "../../shared/types/ModelFormat";
@@ -28,7 +28,8 @@ export class ScadClient {
     ChildProcessWithoutNullStreams
   >();
 
-  public static readonly outputChannel = window.createOutputChannel("OpenSCAD Preview");
+  public static readonly outputChannel =
+    window.createOutputChannel("OpenSCAD Preview");
 
   private static _executablePath: string | undefined;
 
@@ -63,19 +64,26 @@ export class ScadClient {
     return setting ? ["--enable", "lazy-union"] : [];
   }
 
+  public static cancelRender(scadPath: string) {
+    const process = this.activeProcesses.get(scadPath);
+    if (process) {
+      this.activeProcesses.delete(scadPath);
+      process.kill();
+    }
+  }
+
   public static async render(
     scadPath: string,
     parameters: Record<string, string | number | boolean> = {},
     format: ModelFormat = ModelFormat.ThreeMF,
     onStderr?: (chunk: string) => void,
   ): Promise<Buffer> {
-    // Kill any currently running process for this file to prevent runaway
-    // spawn leaks when sliders emit rapid updates.
-    const existingProcess = this.activeProcesses.get(scadPath);
-    if (existingProcess) {
-      existingProcess.kill();
-      this.activeProcesses.delete(scadPath);
-    }
+    this.cancelRender(scadPath);
+    const document = workspace.textDocuments.find(
+      (doc) => doc.uri.fsPath === scadPath,
+    );
+    // Feed unsaved text through stdin; cwd preserves relative include/use/import paths.
+    const source = document?.isDirty ? document.getText() : undefined;
 
     return new Promise((resolve, reject) => {
       const tmpFile = join(
@@ -101,12 +109,17 @@ export class ScadClient {
         "-o",
         tmpFile,
         ...paramArgs,
-        scadPath,
+        source === undefined ? scadPath : "-",
       ];
 
-      this.outputChannel.appendLine(`[OpenSCAD] Running: ${execPath} ${args.join(" ")}`);
+      this.outputChannel.appendLine(
+        `[OpenSCAD] Running: ${execPath} ${args.join(" ")}`,
+      );
 
-      const process = spawn(execPath, args);
+      const process = spawn(execPath, args, { cwd: dirname(scadPath) });
+      // A failed launch or early CLI exit can close stdin before it is written.
+      process.stdin.on("error", () => {});
+      process.stdin.end(source);
 
       this.activeProcesses.set(scadPath, process);
 
@@ -132,21 +145,33 @@ export class ScadClient {
         }
 
         // If process was killed gracefully by our cancellation, reject cleanly.
-        if (signal === "SIGTERM" || (platform === "win32" && signal === null && code === 1 && stderrBuffer === "")) {
+        if (
+          signal === "SIGTERM" ||
+          (platform === "win32" &&
+            signal === null &&
+            code === 1 &&
+            stderrBuffer === "")
+        ) {
           reject(new Error("Render cancelled"));
           return;
         }
 
         if (code !== 0) {
           const detail = stderrBuffer.trim() ? `\n${stderrBuffer.trim()}` : "";
-          this.outputChannel.appendLine(`[OpenSCAD] Process exited with code ${code}${detail ? "" : " (no stderr output)"}`);
-          reject(new Error(`OpenSCAD process exited with code ${code}${detail}`));
+          this.outputChannel.appendLine(
+            `[OpenSCAD] Process exited with code ${code}${detail ? "" : " (no stderr output)"}`,
+          );
+          reject(
+            new Error(`OpenSCAD process exited with code ${code}${detail}`),
+          );
           return;
         }
 
         try {
           const buffer = await readFile(tmpFile);
-          this.outputChannel.appendLine(`[OpenSCAD] Render complete: ${tmpFile}`);
+          this.outputChannel.appendLine(
+            `[OpenSCAD] Render complete: ${tmpFile}`,
+          );
           resolve(buffer);
         } catch (err) {
           reject(new Error(`Failed to read temporary output file: ${err}`));

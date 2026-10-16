@@ -19,10 +19,11 @@
     "watch": "npm run compile -- --watch",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "types": "tsc -p tsconfig.extension.json && tsc -p tsconfig.webview.json",
+    "types": "tsc -p tsconfig.extension.json && tsc -p tsconfig.webview.json && tsc -p tsconfig.test.json",
     "format": "prettier --write .",
     "test": "node ./dist/test/runTest.js",
-    "update": "npx npm-check-updates@latest -u -i"
+    "update": "npx npm-check-updates@latest -u -i",
+    "test:editor": "npm run package && node scripts/test-editor.mjs"
   },
   "extensionPack": [
     "Leathong.openscad-language-support"
@@ -87,25 +88,55 @@
     "commands": [
       {
         "command": "openscad.showPanel",
-        "title": "Show OpenSCAD Preview",
-        "icon": "$(open-preview)"
+        "title": "Open as Preview",
+        "icon": "$(preview)",
+        "category": "OpenSCAD"
+      },
+      {
+        "command": "openscad.showSource",
+        "title": "Reopen as source file",
+        "icon": "$(file-code)",
+        "category": "OpenSCAD"
+      },
+      {
+        "command": "openscad.togglePreview",
+        "title": "OpenSCAD: Toggle Preview"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "openscad.showPanel",
-          "group": "navigation",
-          "when": "resourceLangId == scad || editorLangId == scad"
+          "group": "navigation@2",
+          "when": "activeEditor == workbench.editors.files.textFileEditor && editorLangId == scad && resourceScheme == file"
+        },
+        {
+          "command": "openscad.showSource",
+          "group": "navigation@2",
+          "when": "activeCustomEditorId == 'openscad.preview.editor'"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "openscad.showPanel",
+          "when": "editorLangId == scad && resourceScheme == file"
+        },
+        {
+          "command": "openscad.showSource",
+          "when": "activeCustomEditorId == 'openscad.preview.editor'"
+        },
+        {
+          "command": "openscad.togglePreview",
+          "when": "(editorLangId == scad && resourceScheme == file) || activeCustomEditorId == 'openscad.preview.editor'"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "openscad.showPanel",
+        "command": "openscad.togglePreview",
         "key": "ctrl+shift+v",
         "mac": "cmd+shift+v",
-        "when": "editorLangId == scad"
+        "when": "(editorLangId == scad && resourceScheme == file) || activeCustomEditorId == 'openscad.preview.editor'"
       }
     ],
     "languages": [
@@ -131,6 +162,18 @@
       {
         "language": "scad",
         "path": "./snippets/scad.snippets.json"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "openscad.preview.editor",
+        "displayName": "OpenSCAD Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.scad"
+          }
+        ],
+        "priority": "option"
       }
     ]
   },

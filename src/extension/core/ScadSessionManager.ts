@@ -1,4 +1,4 @@
-import { Uri } from "vscode";
+import { TextDocument, Uri } from "vscode";
 import { ScadSession } from "./ScadSession";
 
 /**
@@ -15,12 +15,12 @@ export class ScadSessionManager {
    * Gets an existing session for a URI or creates a new one if it doesn't
    * exist.
    */
-  public getOrCreateSession(documentUri: Uri): ScadSession {
-    const key = documentUri.toString();
+  public getOrCreateSession(document: TextDocument): ScadSession {
+    const key = document.uri.toString();
     let session = this.sessions.get(key);
 
     if (!session) {
-      session = new ScadSession(documentUri);
+      session = new ScadSession(document);
       this.sessions.set(key, session);
     }
 

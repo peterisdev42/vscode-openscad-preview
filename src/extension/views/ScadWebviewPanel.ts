@@ -21,6 +21,7 @@ export class ScadWebviewPanel {
   private readonly panel: WebviewPanel;
   private disposables: Disposable[] = [];
   private isWebviewReady: boolean = false;
+  private disposed = false;
   private lastRender: { base64Data: string; format: ModelFormat } | undefined;
 
   private get sceneStateKey(): string {
@@ -420,6 +421,8 @@ export class ScadWebviewPanel {
   }
 
   public dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     this.panel.dispose();
     while (this.disposables.length) {
       const x = this.disposables.pop();

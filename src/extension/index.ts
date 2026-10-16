@@ -1,7 +1,12 @@
-import { ExtensionContext } from "vscode";
-import { registerShowPanelCommand } from "./commands/showPanel";
+import { ExtensionContext, window } from "vscode";
+import {
+  previewEditorViewType,
+  registerShowPanelCommand,
+} from "./commands/showPanel";
 import { ScadSessionManager } from "./core/ScadSessionManager";
 import { ScadClient } from "./services/ScadClient";
+
+import { ScadPreviewEditorProvider } from "./views/ScadPreviewEditorProvider";
 
 let sessionManager: ScadSessionManager | undefined;
 
@@ -10,8 +15,18 @@ export function activate(context: ExtensionContext) {
 
   sessionManager = new ScadSessionManager();
 
-  const showPanelDisposable = registerShowPanelCommand(context, sessionManager);
-  context.subscriptions.push(showPanelDisposable);
+  context.subscriptions.push(
+    sessionManager,
+    registerShowPanelCommand(),
+    window.registerCustomEditorProvider(
+      previewEditorViewType,
+      new ScadPreviewEditorProvider(context, sessionManager),
+      {
+        webviewOptions: { enableFindWidget: true },
+        supportsMultipleEditorsPerDocument: false,
+      },
+    ),
+  );
 }
 
 export function deactivate() {

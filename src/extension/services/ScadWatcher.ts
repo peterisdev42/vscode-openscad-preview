@@ -6,6 +6,7 @@ import { readFile, access } from "fs/promises";
  * contents when it does.
  */
 export class FileWatcher {
+  private closed = false;
   private watcher: FSWatcher | undefined;
   private onChange: (data: { content: string }) => void;
 
@@ -50,10 +51,11 @@ export class FileWatcher {
       return;
     }
     const content = await readFile(path, "utf8");
-    this.onChange({ content });
+    if (!this.closed) this.onChange({ content });
   }
 
   close() {
+    this.closed = true;
     if (this.watcher) {
       this.watcher.close();
     }

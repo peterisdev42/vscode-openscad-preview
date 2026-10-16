@@ -1,71 +1,36 @@
-import {
-  commands,
-  Disposable,
-  ExtensionContext,
-  Uri,
-  ViewColumn,
-  window,
-} from "vscode";
-import { ScadSessionManager } from "../core/ScadSessionManager";
-import { ScadWebviewPanel } from "../views/ScadWebviewPanel";
+import { commands, Disposable, TabInputCustom, window } from "vscode";
 
-// Keep track of active panels by URI to avoid opening duplicates
-const activePanels = new Map<string, ScadWebviewPanel>();
+export const previewEditorViewType = "openscad.preview.editor";
 
-export function registerShowPanelCommand(
-  context: ExtensionContext,
-  sessionManager: ScadSessionManager,
-): Disposable {
-  return commands.registerCommand("openscad.showPanel", () => {
-    const editor = window.activeTextEditor;
-
-    if (!editor) {
-      return;
-    }
-
-    const documentUri = editor.document.uri;
-    const key = documentUri.toString();
-
-    // If a panel is already open for this file, just reveal it
-    if (activePanels.has(key)) {
-      // There's currently no public API on ScadPreviewPanel to reveal,
-      // but we can add one later if needed. For now, we just skip creating a duplicate.
-      window.showInformationMessage("Preview is already open for this file.");
-      return;
-    }
-
-    // Retrieve or create the long-lived session for this document
-    const session = sessionManager.getOrCreateSession(documentUri);
-
-    // Create the Webview tab
-    const webviewPanel = window.createWebviewPanel(
-      "openscadPreview",
-      `OpenSCAD Preview: ${documentUri.path.split("/").pop()}`,
-      ViewColumn.Beside,
-      {
-        enableScripts: true,
-        enableFindWidget: true,
-        localResourceRoots: [
-          Uri.joinPath(context.extensionUri, "dist"),
-          Uri.joinPath(context.extensionUri, "node_modules", "three"),
-        ],
-      },
-    );
-
-    // Instantiate our controller wrapper
-    const scadPreviewPanel = new ScadWebviewPanel(
-      webviewPanel,
-      context.extensionUri,
-      session,
-      context.workspaceState,
-    );
-
-    activePanels.set(key, scadPreviewPanel);
-
-    // When the user closes the Webview, clean up our map and tell the session manager
-    webviewPanel.onDidDispose(() => {
-      activePanels.delete(key);
-      sessionManager.removeSession(documentUri);
-    });
-  });
+/** Use the same editor replacement command as the built-in Markdown preview. */
+export function registerShowPanelCommand(): Disposable {
+  return Disposable.from(
+    commands.registerCommand("openscad.showPanel", async () => {
+      const document = window.activeTextEditor?.document;
+      if (document?.languageId !== "scad" || document.uri.scheme !== "file")
+        return;
+      await commands.executeCommand(
+        "reopenActiveEditorWith",
+        previewEditorViewType,
+      );
+    }),
+    commands.registerCommand("openscad.showSource", async () => {
+      const input = window.tabGroups.activeTabGroup.activeTab?.input;
+      if (
+        !(input instanceof TabInputCustom) ||
+        input.viewType !== previewEditorViewType
+      )
+        return;
+      await commands.executeCommand("reopenActiveEditorWith", "default");
+    }),
+    commands.registerCommand("openscad.togglePreview", async () => {
+      const input = window.tabGroups.activeTabGroup.activeTab?.input;
+      await commands.executeCommand(
+        input instanceof TabInputCustom &&
+          input.viewType === previewEditorViewType
+          ? "openscad.showSource"
+          : "openscad.showPanel",
+      );
+    }),
+  );
 }

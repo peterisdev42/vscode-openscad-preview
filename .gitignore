@@ -6,3 +6,6 @@ node_modules
 
 # Build Artifacts
 dist
+
+# Extension host integration tests
+.vscode-test

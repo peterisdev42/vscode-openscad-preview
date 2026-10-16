@@ -1,4 +1,4 @@
-import { EventEmitter, Uri, workspace } from "vscode";
+import { Disposable, EventEmitter, TextDocument, Uri, workspace } from "vscode";
 import { ModelFormat } from "../../shared/types/ModelFormat";
 import { ScadParameter } from "../../shared/types/ScadParameter";
 import { ScadClient } from "../services/ScadClient";
@@ -13,6 +13,23 @@ import { ScadParameters } from "./ScadParameters";
  */
 export class ScadSession {
   private scadWatcher: FileWatcher;
+  private documentSubscription: Disposable;
+  private renderTimer: ReturnType<typeof setTimeout> | undefined;
+  private disposed = false;
+
+  public get documentUri(): Uri {
+    return this.document.uri;
+  }
+
+  private refreshDocument() {
+    if (this.disposed) return;
+    const parser = new ScadParser(this.document.getText());
+    this.scadParameters.updateDefinitions(parser.parameters);
+    this.scadRenderer.render(
+      this.documentUri.fsPath,
+      this.scadParameters.getActiveValues(),
+    );
+  }
   private jsonWatcher?: FileWatcher;
   private scadParameters: ScadParameters;
   private scadRenderer: ScadRenderer;
@@ -41,7 +58,7 @@ export class ScadSession {
   private _onLog = new EventEmitter<string>();
   public readonly onLog = this._onLog.event;
 
-  constructor(public readonly documentUri: Uri) {
+  constructor(private readonly document: TextDocument) {
     this.scadRenderer = new ScadRenderer({
       onStart: () => this._onRenderStarted.fire(),
       onComplete: (data) => this._onRenderCompleted.fire(data),
@@ -56,16 +73,15 @@ export class ScadSession {
 
     // Watcher for file changes.
     this.scadWatcher = new FileWatcher({
-      path: documentUri.fsPath,
-      onChange: ({ content }) => {
-        const parser = new ScadParser(content);
-        this.scadParameters.updateDefinitions(parser.parameters);
+      path: this.documentUri.fsPath,
+      onChange: () => this.refreshDocument(),
+    });
 
-        this.scadRenderer.render(
-          this.documentUri.fsPath,
-          this.scadParameters.getActiveValues(),
-        );
-      },
+    this.documentSubscription = workspace.onDidChangeTextDocument((event) => {
+      if (event.document !== this.document || !event.contentChanges.length)
+        return;
+      clearTimeout(this.renderTimer);
+      this.renderTimer = setTimeout(() => this.refreshDocument(), 250);
     });
 
     this.setupJsonWatcher();
@@ -88,7 +104,9 @@ export class ScadSession {
           if (data.parameterSets) {
             this.scadParameters.updateParameterSets(data.parameterSets);
 
-            const oldValues = JSON.stringify(this.scadParameters.getActiveValues());
+            const oldValues = JSON.stringify(
+              this.scadParameters.getActiveValues(),
+            );
             const activeSetName = this.scadParameters.getActiveSetName();
             if (activeSetName) {
               if (!(activeSetName in data.parameterSets)) {
@@ -96,8 +114,11 @@ export class ScadSession {
               } else {
                 // Hot-reload the active set to ingest external JSON changes into the flat overrides bucket
                 this.scadParameters.setActiveSet(activeSetName);
-                
-                if (JSON.stringify(this.scadParameters.getActiveValues()) !== oldValues) {
+
+                if (
+                  JSON.stringify(this.scadParameters.getActiveValues()) !==
+                  oldValues
+                ) {
                   this.scadRenderer.render(
                     this.documentUri.fsPath,
                     this.scadParameters.getActiveValues(),
@@ -157,7 +178,7 @@ export class ScadSession {
 
   public async saveParameterSet(name: string) {
     const partial = this.scadParameters.calculateActiveSetPartial();
-    
+
     let data: {
       parameterSets?: Record<string, Record<string, string>>;
       fileFormatVersion?: string;
@@ -174,7 +195,10 @@ export class ScadSession {
     data.parameterSets[name] = partial;
     data.fileFormatVersion = "1";
 
-    await workspace.fs.writeFile(this.jsonFileUri, Buffer.from(JSON.stringify(data, null, 2), "utf-8"));
+    await workspace.fs.writeFile(
+      this.jsonFileUri,
+      Buffer.from(JSON.stringify(data, null, 2), "utf-8"),
+    );
     this.scadParameters.updateParameterSets(data.parameterSets);
     this.scadParameters.setActiveSet(name);
   }
@@ -183,13 +207,16 @@ export class ScadSession {
     if (this.scadParameters.getActiveSetName() === name) {
       this.applyParameterSet(undefined);
     }
-    
+
     try {
       const content = await workspace.fs.readFile(this.jsonFileUri);
       const data = JSON.parse(Buffer.from(content).toString("utf-8"));
       if (data.parameterSets && data.parameterSets[name]) {
         delete data.parameterSets[name];
-        await workspace.fs.writeFile(this.jsonFileUri, Buffer.from(JSON.stringify(data, null, 2), "utf-8"));
+        await workspace.fs.writeFile(
+          this.jsonFileUri,
+          Buffer.from(JSON.stringify(data, null, 2), "utf-8"),
+        );
         this.scadParameters.updateParameterSets(data.parameterSets);
       }
     } catch {
@@ -214,11 +241,17 @@ export class ScadSession {
   }
 
   public dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    clearTimeout(this.renderTimer);
+    this.documentSubscription.dispose();
+    ScadClient.cancelRender(this.documentUri.fsPath);
     this.scadWatcher.close();
     this.jsonWatcher?.close();
     this._onRenderStarted.dispose();
     this._onRenderCompleted.dispose();
     this._onRenderError.dispose();
     this._onParametersChanged.dispose();
+    this._onLog.dispose();
   }
 }

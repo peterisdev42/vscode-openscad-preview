@@ -55,8 +55,12 @@ An integrated, interactive 3D preview environment for OpenSCAD (`.scad`) files b
 
 1. Open any OpenSCAD (`.scad`) file in Visual Studio Code.
 2. Click the **Preview Icon** in the top-right editor title bar.
-   > Alternatively, trigger `OpenSCAD: Show Preview` in the Command Palette, or use `Cmd+Shift+V` / `Ctrl+Shift+V`.
-3. The interactive 3D viewer, parameter editor, and logs will dock directly inside your active IDE!
+   > Alternatively, trigger `OpenSCAD: Open as Preview` in the Command Palette, or use `Cmd+Shift+V` / `Ctrl+Shift+V`.
+3. The current tab switches to the interactive 3D viewer. Click **Reopen as source file** in its title bar, or press the same shortcut, to return to the source in the same tab. Opening a `.scad` file still defaults to the source editor.
+
+Unsaved edits are previewed without saving the file. Relative `include`, `use`, and `import` paths resolve from the source file's directory. Save new untitled documents as `.scad` files before previewing.
+
+The tab switch uses `reopenActiveEditorWith`, the same internal workbench command used by the bundled Markdown extension. Recheck this integration when upgrading Code OSS.
 
 ## ⚙️ Configuration
 
@@ -70,3 +74,17 @@ Customize the extension inside VS Code Settings (`Cmd+,`):
 - If you have any feedback, feature requests, or bug reports, please open an issue on the [GitHub repository](https://github.com/thijsdaniels/vscode-openscad-preview).
 - If you would like to fork this project or contribute to it by creating a pull request, please feel free to do so! This project is provided under the [MIT license](LICENSE.md).
 - If you would like to support the development of this extension, please consider [sponsoring me](https://github.com/sponsors/thijsdaniels).
+
+## Development checks
+
+Run `npm run types` and `npm run lint`. To test tab replacement and unsaved text in a real Code OSS extension host:
+
+```sh
+VSCODE_EXECUTABLE_PATH=../vscode/scripts/code.sh npm run test:editor
+```
+
+The editor test uses an isolated temporary profile and a fake CLI, so it does not require OpenSCAD installed. It checks repeated source/preview switches, tab count, dirty text preservation, stdin and working-directory forwarding, and opening through **Open With**.
+
+On the current Code OSS checkout, the workbench can log `CustomEditorInput.applyOptions` / `selection` errors while reopening custom editors. The editor integration assertions still pass; this workbench issue is outside the preview extension. The test uses a fake CLI and does not validate OpenSCAD geometry generation.
+
+The title-bar preview/source buttons use the same icons and navigation group as Markdown. Code OSS also shows its native editor-type dropdown in the breadcrumbs bar for `.scad` files, listing **Text Editor** and **OpenSCAD Preview**, through the `customEditors` contribution. Its visibility follows `breadcrumbs.enabled`, `breadcrumbs.showEditorType`, and the workbench editor visibility preferences.
