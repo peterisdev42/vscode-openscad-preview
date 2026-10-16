@@ -13,7 +13,9 @@ An integrated, interactive 3D preview environment for OpenSCAD (`.scad`) files b
 
 ### 3D Preview
 
-- **Camera Controls:** Switch between perspective and orthographic camera modes.
+- **Measurements:** Use the button directly below Measure to clear all measurement lines and any unfinished measurement.
+- **Reset View:** The reset button beside the projection controls centers and fits the entire model, then restores the Top view (+Z, screen-up +Y), preserving the projection mode.
+- **Camera Controls:** Switch between perspective and orthographic camera modes. The bottom-right view cube snaps the camera to six face, twelve edge, and eight corner views with a short transition, preserving the orbit target, distance, and projection mode. Camera dragging uses a free trackball, and all cube clicks calibrate the camera roll: faces and edges align to the nearest screen axes, and corners use the nearest isometric orientation. Clicking preserves orbit continuity across the poles instead of forcing world Z upward. Face labels use high-resolution, anisotropically filtered textures. Its colors follow the VS Code theme; OpenSCAD coordinates remain Z-up (Top +Z, Front −Y, Right +X).
 - **Visual Environments:** Toggle between a familiar grid, an accurate 256mm² build plate, or a blank environment.
 - **Render Modes:** Swap between solid, x-ray (translucent), and wireframe rendering.
 - **Colors:** Although color declarations in your code are respected, you can toggle them globally, allowing you to switch between a colored and monochrome preview.
@@ -88,3 +90,17 @@ The editor test uses an isolated temporary profile and a fake CLI, so it does no
 On the current Code OSS checkout, the workbench can log `CustomEditorInput.applyOptions` / `selection` errors while reopening custom editors. The editor integration assertions still pass; this workbench issue is outside the preview extension. The test uses a fake CLI and does not validate OpenSCAD geometry generation.
 
 The title-bar preview/source buttons use the same icons and navigation group as Markdown. Code OSS also shows its native editor-type dropdown in the breadcrumbs bar for `.scad` files, listing **Text Editor** and **OpenSCAD Preview**, through the `customEditors` contribution. Its visibility follows `breadcrumbs.enabled`, `breadcrumbs.showEditorType`, and the workbench editor visibility preferences.
+
+Run `npm run test:view-cube` for the 26 view directions, independent face/edge/corner picking, closed geometry, and Z-up pole handling.
+
+`src/test/cameraNavigation.browser.ts` checks all 26 calibrated targets after repeated rolled views in both projection modes, pose restoration, complete horizontal and vertical orbits, and smooth animated calibration across poles, edges and corners.
+
+## Viewport controls and panels
+
+- Left-drag rotates with a free trackball at gain 1.0. Every pointer sample is consumed before the next input event, with no inertial damping. Right-drag (or Shift/Ctrl/Cmd + left-drag) pans one CSS pixel per pointer pixel in perspective and orthographic modes.
+- The entire right sidebar starts closed for each new preview. Use **Toggle Side Panel** at the top right to open Scene, Parameters and Preset controls.
+- To delete a measurement, open the sidebar, hover its **Measurement** row under **Scene**, and click the trash **Remove** button. This removes both the line and its dimension label.
+- Left toolbar: Select; Move, Rotate and Scale the selected scene object; Measure with Vertex, Edge or Face snapping. Right toolbar: camera selection; perspective/orthographic projection; solid/X-Ray/wireframe rendering; shadows; environment; log and sidebar visibility. Hover any icon for its label.
+- With **Build Plate** enabled, **Plate origin: center** retains the existing centered layout. **Plate origin: lower-left** places the lower-left of the existing 250 × 250 printable grid at world `(0, 0, 0)`, moving the plate and grid together. Decorative plate tabs may extend outside the printable grid. The model and camera target stay in place.
+
+Run `npm run test:viewport` to check 1:1 screen-space panning across projections, FOVs and distances, and both build plate origins. The browser navigation regression also checks that real input handlers consume rotation samples without waiting for a render frame.

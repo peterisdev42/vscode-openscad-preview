@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   Color,
   DoubleSide,
@@ -12,11 +13,16 @@ import {
   Object3D,
   OrthographicCamera,
   PerspectiveCamera,
+  Quaternion,
+  Vector3,
 } from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
 import { CameraProperties } from "../../contexts/SelectedObjectContext";
 import { CameraMode } from "../../contexts/ViewOptionsContext";
 import { Rig } from "./Rig";
+import { DirectPointerNavigation } from "./DirectPointerNavigation";
+
+import { cubeViewUp, cubeViewDirection } from "../widgets/ViewCubeGeometry";
 
 const GIZMO_DISPLAY_DISTANCE = 15;
 
@@ -24,7 +30,8 @@ export class CameraRig extends Rig {
   public readonly id: string;
   private persCamera: PerspectiveCamera;
   private orthCamera: OrthographicCamera;
-  private controls: OrbitControls;
+  private controls: TrackballControls;
+  private pointerNavigation: DirectPointerNavigation;
   public activeCamera: PerspectiveCamera | OrthographicCamera;
   private gizmoGroup: Group;
   private gizmoLines: LineSegments;
@@ -32,6 +39,14 @@ export class CameraRig extends Rig {
   private _userVisible = true;
   private _isActiveCamera = false;
   private color: Color;
+  private orientationTransition?: {
+    start: number;
+    duration: number;
+    offset: Vector3;
+    up: Vector3;
+    rotation: Quaternion;
+    roll: number;
+  };
 
   constructor(
     id: string,
@@ -65,9 +80,21 @@ export class CameraRig extends Rig {
 
     this.activeCamera = this.persCamera;
 
-    this.controls = new OrbitControls(this.persCamera, domElement);
+    this.controls = new TrackballControls(this.persCamera, domElement);
     this.controls.zoomSpeed = 0.5;
+    this.controls.staticMoving = true;
+    this.controls.rotateSpeed = 1;
+    this.controls.keys = ["", "", ""];
+    this.controls.addEventListener("start", () => {
+      this.orientationTransition = undefined;
+    });
     this.controls.addEventListener("change", () => this.syncCameras());
+    this.pointerNavigation = new DirectPointerNavigation(
+      this.controls,
+      this.persCamera,
+      () => this.activeCamera,
+      domElement,
+    );
 
     this.syncCameras();
 
@@ -130,7 +157,7 @@ export class CameraRig extends Rig {
     return this.persCamera;
   }
 
-  public getControls(): OrbitControls {
+  public getControls(): TrackballControls {
     return this.controls;
   }
 
@@ -140,8 +167,98 @@ export class CameraRig extends Rig {
       mode === CameraMode.Orthographic ? this.orthCamera : this.persCamera;
   }
 
+  /** Orient the active rig without moving the orbit target or changing zoom. */
+  public orientTo(direction: Vector3, duration = 280): void {
+    if (!direction.lengthSq()) return;
+    const offset = this.persCamera.position.clone().sub(this.controls.target);
+    if (!offset.lengthSq()) return;
+    const end = cubeViewDirection(direction);
+    const start = offset.clone().normalize();
+    const rotation =
+      start.dot(end) < -1 + 1e-10
+        ? new Quaternion().setFromAxisAngle(
+            this.persCamera.up.clone().cross(start).normalize(),
+            Math.PI,
+          )
+        : new Quaternion().setFromUnitVectors(start, end);
+    const up = new Vector3(0, 1, 0).applyQuaternion(this.persCamera.quaternion);
+    const transportedUp = up.clone().applyQuaternion(rotation);
+    const viewUp = cubeViewUp(end, transportedUp);
+    const roll = Math.atan2(
+      end.dot(transportedUp.clone().cross(viewUp)),
+      transportedUp.dot(viewUp),
+    );
+    this.orientationTransition = {
+      start: performance.now(),
+      duration,
+      offset,
+      up,
+      rotation,
+      roll,
+    };
+    if (duration <= 0) this.update();
+  }
+
+  /** Center the complete model and restore the canonical Top (+Z, screen-up +Y) view. */
+  public resetView(bounds: Box3): void {
+    this.orientationTransition = undefined;
+    const center = bounds.isEmpty()
+      ? new Vector3()
+      : bounds.getCenter(new Vector3());
+    const half = bounds.isEmpty()
+      ? new Vector3(50, 50, 50)
+      : bounds.getSize(new Vector3()).multiplyScalar(0.5);
+    const tangent = Math.tan(MathUtils.degToRad(this.persCamera.fov / 2));
+    // Keep margin on both screen axes, including portrait-shaped viewports.
+    const halfHeight =
+      Math.max(half.y, half.x / this.persCamera.aspect, 0.01) * 1.2;
+    const distance =
+      this.activeCamera === this.orthCamera
+        ? Math.max(halfHeight / tangent, half.z + this.persCamera.near * 2)
+        : half.z + Math.max(halfHeight / tangent, this.persCamera.near * 2);
+    this.controls.target.copy(center);
+    this.persCamera.position.copy(center).add(new Vector3(0, 0, distance));
+    this.persCamera.up.set(0, 1, 0);
+    this.persCamera.zoom = 1;
+    this.persCamera.far = Math.max(this.persCamera.far, distance + half.z + 1);
+    this.orthCamera.far = this.persCamera.far;
+    this.persCamera.updateProjectionMatrix();
+    this.persCamera.lookAt(center);
+    this.update();
+  }
+
   public update(): void {
+    const transition = this.orientationTransition;
+    if (transition) {
+      const progress =
+        transition.duration <= 0
+          ? 1
+          : Math.min(
+              1,
+              (performance.now() - transition.start) / transition.duration,
+            );
+      const eased = progress * progress * (3 - 2 * progress);
+      const rotation = new Quaternion().slerp(transition.rotation, eased);
+      this.persCamera.position
+        .copy(transition.offset)
+        .applyQuaternion(rotation)
+        .add(this.controls.target);
+      this.persCamera.up
+        .copy(transition.up)
+        .applyQuaternion(rotation)
+        .normalize();
+      // Correct screen roll to the nearest equivalent pose after transporting up.
+      if (transition.roll) {
+        const direction = this.persCamera.position
+          .clone()
+          .sub(this.controls.target)
+          .normalize();
+        this.persCamera.up.applyAxisAngle(direction, transition.roll * eased);
+      }
+      if (progress === 1) this.orientationTransition = undefined;
+    }
     this.controls.update();
+    this.syncCameras();
   }
 
   public resize(width: number, height: number): void {
@@ -155,11 +272,13 @@ export class CameraRig extends Rig {
     this.orthCamera.bottom = -viewSize;
     this.orthCamera.updateProjectionMatrix();
 
+    this.controls.handleResize();
     this.rebuildGizmoGeometry();
   }
 
   public setIsActiveCamera(active: boolean): void {
     this._isActiveCamera = active;
+    if (!active) this.orientationTransition = undefined;
     this.updateGizmoVisibility();
   }
 
@@ -193,6 +312,18 @@ export class CameraRig extends Rig {
       case "positionZ":
         this.persCamera.position.z = value;
         break;
+      case "rotationX":
+      case "rotationY":
+      case "rotationZ": {
+        const axis =
+          key === "rotationX" ? "x" : key === "rotationY" ? "y" : "z";
+        this.persCamera.rotation[axis] = MathUtils.degToRad(value);
+        // Saved Euler angles must restore free-orbit roll as well as position.
+        this.persCamera.up
+          .set(0, 1, 0)
+          .applyQuaternion(this.persCamera.quaternion);
+        break;
+      }
     }
   }
 
@@ -214,6 +345,8 @@ export class CameraRig extends Rig {
   }
 
   public dispose(): void {
+    this.orientationTransition = undefined;
+    this.pointerNavigation.dispose();
     this.controls.dispose();
     this.gizmoLines.geometry.dispose();
     (this.gizmoLines.material as LineBasicMaterial).dispose();
@@ -245,6 +378,7 @@ export class CameraRig extends Rig {
   private syncCameras(): void {
     this.orthCamera.position.copy(this.persCamera.position);
     this.orthCamera.quaternion.copy(this.persCamera.quaternion);
+    this.orthCamera.up.copy(this.persCamera.up);
 
     // Translate perspective distance into ortho zoom so "zoom level" stays in sync.
     const distance = this.persCamera.position.distanceTo(this.controls.target);

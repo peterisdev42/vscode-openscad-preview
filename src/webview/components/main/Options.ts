@@ -3,12 +3,13 @@ import {
   VscContextMenuSelectEvent,
   VscodeContextMenu,
 } from "@vscode-elements/elements/dist/vscode-context-menu/vscode-context-menu.js";
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 import { SceneContext, sceneContext } from "../../contexts/SceneContext";
 import { PanelContext, panelContext } from "../../contexts/PanelContext";
 import {
   CameraMode,
+  BuildPlateOrigin,
   Environment,
   RenderMode,
   ViewOptions,
@@ -104,6 +105,15 @@ export class Options extends LitElement {
 
       <div class="group">
         <scad-icon-button
+          label="Reset view (fit model, Top)"
+          @change=${() =>
+            this.dispatchEvent(
+              new CustomEvent("reset-view", { bubbles: true, composed: true }),
+            )}
+        >
+          <scad-icon name="view-reset"></scad-icon>
+        </scad-icon-button>
+        <scad-icon-button
           label="Perspective"
           toggleable
           .checked=${get("camera") === CameraMode.Perspective}
@@ -185,6 +195,32 @@ export class Options extends LitElement {
           <scad-icon name="env-build-plate"></scad-icon>
         </scad-icon-button>
       </div>
+
+      ${get("environment") === Environment.BuildPlate
+        ? html`
+            <div class="group" aria-label="Build plate origin">
+              <scad-icon-button
+                label="Plate origin: center"
+                toggleable
+                .checked=${get("buildPlateOrigin") === BuildPlateOrigin.Center}
+                @change=${() =>
+                  this.set("buildPlateOrigin", BuildPlateOrigin.Center)}
+              >
+                <scad-icon name="plate-origin-center"></scad-icon>
+              </scad-icon-button>
+              <scad-icon-button
+                label="Plate origin: lower-left"
+                toggleable
+                .checked=${get("buildPlateOrigin") ===
+                BuildPlateOrigin.LowerLeft}
+                @change=${() =>
+                  this.set("buildPlateOrigin", BuildPlateOrigin.LowerLeft)}
+              >
+                <scad-icon name="plate-origin-corner"></scad-icon>
+              </scad-icon-button>
+            </div>
+          `
+        : nothing}
 
       <div class="group">
         <scad-icon-button

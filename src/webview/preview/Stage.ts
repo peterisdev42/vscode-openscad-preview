@@ -16,7 +16,7 @@ import {
 
 // OpenSCAD uses Z-up; align Three.js to match so models load without reorientation.
 // Setting DEFAULT_UP before any Object3D is constructed makes every camera, light,
-// and helper inherit Z-up via its constructor (camera.up, OrbitControls behavior, …).
+// and helper inherit Z-up via its constructor (camera.up, TrackballControls behavior, …).
 Object3D.DEFAULT_UP.set(0, 0, 1);
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -49,7 +49,7 @@ import { MoveTool } from "./tools/MoveTool";
 import { RotateTool } from "./tools/RotateTool";
 import { ScaleTool } from "./tools/ScaleTool";
 import { SelectTool } from "./tools/SelectTool";
-import { AxesWidget } from "./widgets/AxesWidget";
+import { ViewCubeWidget } from "./widgets/ViewCubeWidget";
 
 export interface Theme {
   background: Color;
@@ -85,7 +85,7 @@ export class Stage {
   private xrayPass: XRayPass;
 
   private modelGroup: Group;
-  private axesWidget: AxesWidget;
+  private viewCube: ViewCubeWidget;
   private viewOptions?: ViewOptionsContext;
 
   // Scene object registry
@@ -155,7 +155,9 @@ export class Stage {
     // 4. Groups and widgets
     this.modelGroup = new Group();
     this.scene.add(this.modelGroup);
-    this.axesWidget = new AxesWidget(container);
+    this.viewCube = new ViewCubeWidget(container, (direction) => {
+      this.activeCameraRig.orientTo(direction);
+    });
 
     // 5. Shared TransformControls
     this.transformControls = new TransformControls(
@@ -240,6 +242,7 @@ export class Stage {
     this.handles.clear();
     this.cameraHandles.clear();
     this.xrayPass.dispose();
+    this.viewCube.dispose();
 
     if (this.renderer) this.renderer.dispose();
   }
@@ -270,7 +273,10 @@ export class Stage {
 
   public applySettings(viewOptions: ViewOptionsContext) {
     this.viewOptions = viewOptions;
-    this.environmentRig.setEnvironment(viewOptions.get("environment"));
+    this.environmentRig.setEnvironment(
+      viewOptions.get("environment"),
+      viewOptions.get("buildPlateOrigin"),
+    );
     this.activeCameraRig.setMode(viewOptions.get("camera"));
     this.renderer.shadowMap.enabled = viewOptions.get("shadows");
     this.scene.fog = new FogExp2(this.theme.fog, viewOptions.get("fogDensity"));
@@ -354,6 +360,21 @@ export class Stage {
     this.rebuildModelClipping();
   }
 
+  public resetView(): void {
+    this.activeCameraRig.resetView(new Box3().setFromObject(this.modelGroup));
+    if (this.selectedId === this.activeCameraRig.id)
+      this.onPropertiesChange?.(this.activeCameraRig.getProperties());
+    this.onPersist?.();
+  }
+
+  public clearMeasurements(): void {
+    const tool = this.toolManager.activeTool;
+    if (tool instanceof MeasureTool) tool.clear();
+    for (const [id, handle] of this.handles) {
+      if (handle instanceof MeasurementRig) this.removeSceneObject(id);
+    }
+  }
+
   // ============= Scene Object Registry =============
 
   public addSceneObject(type: SceneObjectType, id: string): void {
@@ -399,15 +420,39 @@ export class Stage {
       this.scene.add(h.light);
       handle = h;
     } else if (type === "directional-light") {
-      const h = new DirectionalLightRig(id, 0.5 * Math.PI, 100, 50, 200, this.theme.foreground);
+      const h = new DirectionalLightRig(
+        id,
+        0.5 * Math.PI,
+        100,
+        50,
+        200,
+        this.theme.foreground,
+      );
       this.scene.add(h.light);
       handle = h;
     } else if (type === "spot-light") {
-      const h = new SpotLightRig(id, 0.5 * Math.PI, 200, 200, 200, 0.15, 1, this.theme.foreground);
+      const h = new SpotLightRig(
+        id,
+        0.5 * Math.PI,
+        200,
+        200,
+        200,
+        0.15,
+        1,
+        this.theme.foreground,
+      );
       this.scene.add(h.light);
       handle = h;
     } else if (type === "point-light") {
-      const h = new PointLightRig(id, 0.25 * Math.PI, -200, -200, -200, 0, this.theme.foreground);
+      const h = new PointLightRig(
+        id,
+        0.25 * Math.PI,
+        -200,
+        -200,
+        -200,
+        0,
+        this.theme.foreground,
+      );
       this.scene.add(h.light);
       handle = h;
     }
@@ -576,7 +621,7 @@ export class Stage {
   /**
    * Register a callback that fires when persistable scene state changes via a
    * channel that doesn't already flow through the scene/selected-object
-   * contexts — currently just OrbitControls movements on any camera.
+   * contexts — currently just TrackballControls movements on any camera.
    */
   public setPersistCallback(cb: () => void): void {
     this.onPersist = cb;
@@ -671,7 +716,7 @@ export class Stage {
   private startAnimationLoop = () => {
     this.animationFrameId = requestAnimationFrame(this.startAnimationLoop);
     this.activeCameraRig.update();
-    this.axesWidget.update(this.activeCameraRig.activeCamera);
+    this.viewCube.update(this.activeCameraRig.activeCamera);
     const cam = this.activeCameraRig.getPerspectiveCamera();
     this.environmentRig.updateCamera(
       cam.position.distanceTo(this.activeCameraRig.getControls().target),
@@ -762,5 +807,4 @@ export class Stage {
       this.snapEnabled ? ROTATION_SNAP : null,
     );
   };
-
 }

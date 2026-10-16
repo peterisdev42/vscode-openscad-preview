@@ -23,7 +23,9 @@
     "format": "prettier --write .",
     "test": "node ./dist/test/runTest.js",
     "update": "npx npm-check-updates@latest -u -i",
-    "test:editor": "npm run package && node scripts/test-editor.mjs"
+    "test:editor": "npm run package && node scripts/test-editor.mjs",
+    "test:view-cube": "node --import tsx --test src/test/viewCube.test.ts",
+    "test:viewport": "node --import tsx --test src/test/navigationAndPlate.test.ts"
   },
   "extensionPack": [
     "Leathong.openscad-language-support"

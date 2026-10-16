@@ -8,6 +8,23 @@ declare global {
 }
 
 const icons = {
+  "clear-measurements": svg`
+    <path d="M2 5h12M6 2h4l1 3M4 5l1 9h6l1-9M7 7v5M9 7v5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  `,
+  "view-reset": svg`
+    <path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 11V5M5.5 7.5 8 5l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  `,
+  "plate-origin-center": svg`
+    <rect x="2" y="2" width="12" height="12" rx="1" fill="none" stroke="currentColor"/>
+    <path d="M5 8h6M8 5v6" stroke="currentColor" stroke-width="1.5"/>
+    <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+  `,
+  "plate-origin-corner": svg`
+    <rect x="2" y="2" width="12" height="12" rx="1" fill="none" stroke="currentColor"/>
+    <path d="M2 9v5h5" fill="none" stroke="currentColor" stroke-width="2"/>
+    <circle cx="2" cy="14" r="1.5" fill="currentColor"/>
+  `,
   // Tools
   "tool-select": svg`
     <path d="M4 2 L4 13 L7.5 10 L11 14 L12.5 13 L9 9 L13 8 Z" fill="currentColor"/>
@@ -33,7 +50,7 @@ const icons = {
   `,
 
   // Scene objects
-  "camera": svg`
+  camera: svg`
     <rect x="1.5" y="5" width="13" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
     <path d="M5.5 5 L6 3 L10 3 L10.5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
     <circle cx="8" cy="9" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
@@ -42,7 +59,7 @@ const icons = {
     <rect x="2" y="2" width="12" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
     <line x1="2" y1="10" x2="14" y2="5" stroke="currentColor" stroke-width="1.5"/>
   `,
-  "measurement": svg`
+  measurement: svg`
     <rect x="1" y="5" width="14" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
     <line x1="4" y1="5" x2="4" y2="8" stroke="currentColor" stroke-width="1"/>
     <line x1="7" y1="5" x2="7" y2="9" stroke="currentColor" stroke-width="1"/>
@@ -115,7 +132,7 @@ const icons = {
   `,
 
   // Effects
-  "shadows": svg`
+  shadows: svg`
     <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
     <path d="M 8 2 A 6 6 0 0 1 8 14 Z" fill="currentColor"/>
   `,

@@ -6,14 +6,19 @@ import {
   MeshStandardMaterial,
 } from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { Environment } from "../../contexts/ViewOptionsContext";
+import {
+  BuildPlateOrigin,
+  Environment,
+} from "../../contexts/ViewOptionsContext";
 import buildPlate from "../assets/models/buildPlate.stl";
 import { Theme } from "../Stage";
 import { InfiniteGrid } from "../widgets/InfiniteGrid";
+import { BUILD_PLATE_SIZE, buildPlateOffset } from "./BuildPlateLayout";
 
 export class EnvironmentManager {
   public group: Group;
   private infiniteGrid?: InfiniteGrid;
+  private plateOrigin = BuildPlateOrigin.Center;
   private buildPlate?: {
     mesh: Mesh<BufferGeometry, MeshStandardMaterial>;
     grid: GridHelper;
@@ -33,8 +38,14 @@ export class EnvironmentManager {
     this.infiniteGrid?.setTheme(theme);
   }
 
-  public setEnvironment(environment: Environment) {
+  public setEnvironment(
+    environment: Environment,
+    plateOrigin = BuildPlateOrigin.Center,
+  ) {
+    if (this.environment === environment && this.plateOrigin === plateOrigin)
+      return;
     this.environment = environment;
+    this.plateOrigin = plateOrigin;
     this.redraw();
   }
 
@@ -53,6 +64,10 @@ export class EnvironmentManager {
     if (this.buildPlate) {
       this.group.remove(this.buildPlate.mesh);
       this.group.remove(this.buildPlate.grid);
+      this.buildPlate.mesh.geometry.dispose();
+      this.buildPlate.mesh.material.dispose();
+      this.buildPlate.grid.geometry.dispose();
+      this.buildPlate.grid.material.dispose();
       this.buildPlate = undefined;
     }
 
@@ -81,7 +96,7 @@ export class EnvironmentManager {
     this.group.add(mesh);
 
     const grid = new GridHelper(
-      250,
+      BUILD_PLATE_SIZE,
       25,
       this.theme.plateGrid,
       this.theme.plateGrid,
@@ -90,6 +105,9 @@ export class EnvironmentManager {
     grid.material.depthTest = false;
     grid.material.fog = false;
     this.group.add(grid);
+    const offset = buildPlateOffset(this.plateOrigin);
+    mesh.position.copy(offset);
+    grid.position.copy(offset);
 
     return { mesh, grid };
   }

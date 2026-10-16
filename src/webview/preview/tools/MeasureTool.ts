@@ -118,6 +118,14 @@ export class MeasureTool implements Tool {
     (this.previewLine.material as LineMaterial).dispose();
   }
 
+  /** Discard the unfinished measurement without leaving measurement mode. */
+  public clear(): void {
+    this.pendingA = null;
+    this.hoverMarker.visible = false;
+    this.pendingAMarker.visible = false;
+    this.previewLine.visible = false;
+  }
+
   // ============= Event handlers =============
 
   private handleMove = (e: MouseEvent) => {

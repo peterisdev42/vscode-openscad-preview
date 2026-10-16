@@ -58,6 +58,7 @@ export class IconButton extends LitElement {
     return html`
       <button
         aria-label=${this.label || nothing}
+        title=${this.label || nothing}
         role=${this.toggleable ? "switch" : nothing}
         aria-checked=${this.toggleable ? this.checked : nothing}
         class=${this.toggleable && this.checked ? "checked" : ""}

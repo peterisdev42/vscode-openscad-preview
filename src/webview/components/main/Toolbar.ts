@@ -108,7 +108,23 @@ export class Toolbar extends LitElement {
     return html`
       ${groups.map(
         (group) => html`
-          <div class="group">${group.map((tool) => this.renderTool(tool))}</div>
+          <div class="group">
+            ${group.map((tool) => this.renderTool(tool))}
+            ${group.some((tool) => tool.id === ActiveTool.Measure)
+              ? html`<scad-icon-button
+                  label="Clear all measurements"
+                  @change=${() =>
+                    this.dispatchEvent(
+                      new CustomEvent("clear-measurements", {
+                        bubbles: true,
+                        composed: true,
+                      }),
+                    )}
+                >
+                  <scad-icon name="clear-measurements"></scad-icon>
+                </scad-icon-button>`
+              : nothing}
+          </div>
         `,
       )}
     `;

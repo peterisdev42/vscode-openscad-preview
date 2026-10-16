@@ -6,6 +6,11 @@ export enum Environment {
   BuildPlate = "buildPlate",
 }
 
+export enum BuildPlateOrigin {
+  Center = "center",
+  LowerLeft = "lowerLeft",
+}
+
 export enum RenderMode {
   Solid = "solid",
   Wireframe = "wireframe",
@@ -19,6 +24,7 @@ export enum CameraMode {
 
 export interface ViewOptions {
   environment: Environment;
+  buildPlateOrigin: BuildPlateOrigin;
   renderMode: RenderMode;
   camera: CameraMode;
   shadows: boolean;

@@ -28,6 +28,7 @@ import {
 import {
   CameraMode,
   Environment,
+  BuildPlateOrigin,
   RenderMode,
   ViewOptionsContext,
   viewOptionsContext,
@@ -67,7 +68,7 @@ export class App extends LitElement {
   @state()
   private panelContext: PanelContext = {
     panels: {
-      sidePanel: true,
+      sidePanel: false,
       bottomPanel: false,
     },
     toggle: (panel: keyof PanelContext["panels"]) => {
@@ -89,6 +90,7 @@ export class App extends LitElement {
   viewSettingsContext: ViewOptionsContext = {
     options: {
       environment: Environment.Grid,
+      buildPlateOrigin: BuildPlateOrigin.Center,
       renderMode: RenderMode.Solid,
       camera: CameraMode.Perspective,
       shadows: false,
@@ -489,8 +491,12 @@ export class App extends LitElement {
         >
           <div slot="start" style="position:relative;width:100%;height:100%;">
             <scad-preview></scad-preview>
-            <scad-toolbar></scad-toolbar>
-            <scad-options></scad-options>
+            <scad-toolbar
+              @clear-measurements=${this.clearMeasurements}
+            ></scad-toolbar>
+            <scad-options
+              @reset-view=${() => this.previewEl?.stage?.resetView()}
+            ></scad-options>
           </div>
           <div slot="end">
             ${sidePanel ? html`<scad-side-panel></scad-side-panel>` : nothing}
@@ -502,6 +508,23 @@ export class App extends LitElement {
       </scad-split-layout>
     `;
   }
+
+  private clearMeasurements = () => {
+    this.previewEl?.stage?.clearMeasurements();
+    const objects = this.sceneContextValue.objects.filter(
+      (object) => object.type !== "measurement",
+    );
+    this.sceneContextValue = {
+      ...this.sceneContextValue,
+      objects,
+      selectedId: objects.some(
+        (object) => object.id === this.sceneContextValue.selectedId,
+      )
+        ? this.sceneContextValue.selectedId
+        : null,
+    };
+    this.schedulePersist();
+  };
 
   private handleResize(panel: "right" | "bottom", e: CustomEvent) {
     if (!e.detail) return;
